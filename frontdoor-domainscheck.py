@@ -26,7 +26,9 @@ with open(csv_file_path, mode='w', newline='') as file:
     base_headers = ["Subscription ID", "Subscription Name", "Front Door Name", "Resource Group", "Location"]
     writer.writerow(base_headers)
 
-    # Variable to track maximum number of domains across all Front Doors
+    # Variable to track maximum number of front-ends, backends, and domains across all Front Doors
+    max_frontends = 0
+    max_backends = 0
     max_domains = 0
 
     # Store rows temporarily so that we can expand the headers later
@@ -57,20 +59,26 @@ with open(csv_file_path, mode='w', newline='') as file:
                     resource_group = extract_resource_group(fd.id)  # Extract resource group from resource ID
                     location = fd.location
 
-                    # List the associated domains for the Front Door
-                    if fd.frontend_endpoints:
-                        # Get domain names into a list
-                        domains = [endpoint.host_name for endpoint in fd.frontend_endpoints]
-                    else:
-                        domains = ["No associated domains found"]
+                    # Fetch the frontend endpoints (domains) associated with this Front Door
+                    frontends = [endpoint.host_name for endpoint in fd.frontend_endpoints] if fd.frontend_endpoints else []
+                    # Fetch the backend pools associated with this Front Door
+                    backends = [backend.name for backend in fd.backend_pools] if fd.backend_pools else []
+                    # For designer domains (assuming they're frontend endpoints), it's already handled in frontends
 
-                    # Track the maximum number of domains
-                    max_domains = max(max_domains, len(domains))
+                    # Track the maximum numbers for dynamic CSV columns
+                    max_frontends = max(max_frontends, len(frontends))
+                    max_backends = max(max_backends, len(backends))
 
-                    # Add the base data for the current Front Door resource
+                    # Prepare the row with the basic data
                     row = [subscription_id, subscription_name, front_door_name, resource_group, location]
-                    row.extend(domains)  # Add the domains as separate columns
 
+                    # Append frontend endpoints (domains)
+                    row.extend(frontends)
+
+                    # Append backend pools
+                    row.extend(backends)
+
+                    # Store the row
                     rows.append(row)
 
             except HttpResponseError as e:
@@ -79,12 +87,13 @@ with open(csv_file_path, mode='w', newline='') as file:
     except HttpResponseError as e:
         print(f"Error fetching subscriptions: {e}")
 
-    # Update the CSV headers to include domain columns based on max_domains
-    domain_headers = [f"Domain {i + 1}" for i in range(max_domains)]
-    full_headers = base_headers + domain_headers
+    # Update the CSV headers to include dynamic columns based on max_frontends and max_backends
+    frontend_headers = [f"Frontend Domain {i + 1}" for i in range(max_frontends)]
+    backend_headers = [f"Backend Pool {i + 1}" for i in range(max_backends)]
+    full_headers = base_headers + frontend_headers + backend_headers
     print(f"Writing headers: {full_headers}")
 
-    # Rewrite the headers with domain columns
+    # Rewrite the headers with frontend and backend columns
     file.seek(0)
     writer.writerow(full_headers)
 
