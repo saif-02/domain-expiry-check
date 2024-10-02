@@ -12,6 +12,11 @@ subscription_client = SubscriptionClient(credential)
 # Define CSV file path
 csv_file_path = "frontdoor_data.csv"
 
+# Function to extract resource group from resource ID
+def extract_resource_group(resource_id):
+    parts = resource_id.split('/')
+    return parts[4] if len(parts) > 4 else "Unknown"
+
 # Open CSV file for writing
 with open(csv_file_path, mode='w', newline='') as file:
     writer = csv.writer(file)
@@ -33,16 +38,5 @@ with open(csv_file_path, mode='w', newline='') as file:
 
         for fd in frontdoors:
             front_door_name = fd.name
-            resource_group = fd.resource_group
-            location = fd.location
-
-            # List the associated domains for the Front Door
-            if fd.frontend_endpoints:
-                for endpoint in fd.frontend_endpoints:
-                    # Write the row to the CSV file for each associated domain
-                    writer.writerow([subscription_id, subscription_name, front_door_name, resource_group, location, endpoint.host_name])
-            else:
-                # If no associated domain, write a row indicating that
-                writer.writerow([subscription_id, subscription_name, front_door_name, resource_group, location, "No associated domains found"])
-
-print(f"Front Door data exported successfully to {csv_file_path}")
+            resource_group = extract_resource_group(fd.id)  # Extract resource group from resource ID
+            location = fd
