@@ -6,9 +6,6 @@ from azure.mgmt.resource import SubscriptionClient, ResourceManagementClient
 # CSV file containing the list of domains to check
 CSV_FILE = "domains.csv"
 
-# Output file for the results
-OUTPUT_FILE = "domain_app_gateway_check.csv"
-
 # Azure credentials
 credential = DefaultAzureCredential()
 
@@ -54,27 +51,33 @@ def main():
         reader = csv.reader(file)
         domain_list = [row[0].strip() for row in reader if row]
 
-    # Create or clear the output file and add headers
-    with open(OUTPUT_FILE, mode='w', newline='') as file:
+    # Create a list to store all results
+    all_results = []
+
+    # Iterate through all subscriptions
+    for subscription in subscription_client.subscriptions.list():
+        subscription_id = subscription.subscription_id
+        print(f"Checking subscription: {subscription_id}")
+
+        # Create a NetworkManagementClient for each subscription
+        network_client = NetworkManagementClient(credential, subscription_id)
+
+        # Check domains in this subscription's Application Gateway services
+        results = check_domains_in_application_gateway(subscription_id, network_client, domain_list)
+
+        # Append results to the all_results list
+        all_results.extend(results)
+
+    # Write results to the same CSV file
+    with open(CSV_FILE, mode='a', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Domain", "Application Gateway Name", "Resource Group", "Subscription ID"])
-
-        # Iterate through all subscriptions
-        for subscription in subscription_client.subscriptions.list():
-            subscription_id = subscription.subscription_id
-            print(f"Checking subscription: {subscription_id}")
-
-            # Create a NetworkManagementClient for each subscription
-            network_client = NetworkManagementClient(credential, subscription_id)
-
-            # Check domains in this subscription's Application Gateway services
-            results = check_domains_in_application_gateway(subscription_id, network_client, domain_list)
-
-            # Write results to the CSV file
-            for result in results:
+        # Write a header for results if there are any
+        if all_results:
+            writer.writerow(["Domain", "Application Gateway Name", "Resource Group", "Subscription ID"])
+            for result in all_results:
                 writer.writerow([result["Domain"], result["App Gateway Name"], result["Resource Group"], result["Subscription ID"]])
 
-    print(f"Domain check completed. Results saved to {OUTPUT_FILE}")
+    print(f"Domain check completed. Results appended to {CSV_FILE}")
 
 
 if __name__ == "__main__":
