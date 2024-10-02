@@ -23,10 +23,14 @@ def check_domains_in_application_gateway(subscription_id, network_client, domain
     resource_groups = resource_client.resource_groups.list()
 
     for resource_group in resource_groups:
+        print(f"Checking resource group: {resource_group.name}")  # Debugging output
+
         # List all Application Gateway services in the resource group
         app_gateways = network_client.application_gateways.list(resource_group.name)
 
         for app_gateway in app_gateways:
+            print(f"Found Application Gateway: {app_gateway.name}")  # Debugging output
+
             # Check the listeners in each Application Gateway
             for listener in app_gateway.http_listeners:
                 # Get the domain name (host_name) from the listener
