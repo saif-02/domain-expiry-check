@@ -20,13 +20,17 @@ def check_domains_in_application_gateway(subscription_id, network_client, domain
     results = []
 
     # List all Application Gateway services in the subscription
-    app_gateways = network_client.application_gateways.list_all()
+    app_gateways = network_client.application_gateways.list()
 
     for app_gateway in app_gateways:
         # Check the listeners in each Application Gateway
         for listener in app_gateway.http_listeners:
-            # Check if the listener is on port 443
-            if listener.frontend_port.port == 443:
+            # Fetch the frontend port
+            frontend_port_id = listener.frontend_port.id
+            frontend_ports = {port.id: port for port in app_gateway.frontend_ports}
+
+            # Check if the listener is using port 443
+            if frontend_ports.get(frontend_port_id) and frontend_ports[frontend_port_id].port == 443:
                 # Get the domain name (host_name) from the listener
                 domain = listener.host_name
 
