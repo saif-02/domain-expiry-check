@@ -16,28 +16,25 @@ credential = DefaultAzureCredential()
 subscription_client = SubscriptionClient(credential)
 
 
-def check_domains_in_apim(subscription_id, apim_client, domain_list):
+def check_custom_domains_in_apim(subscription_id, apim_client, domain_list):
     apim_results = []
 
     # List all API Management services in the subscription
     apim_services = apim_client.api_management_service.list()
 
     for apim in apim_services:
-        # Check for custom domains in APIM (for Gateway, Management Portal, Developer Portal, SCM)
-        custom_domains = [
-            apim.hostname_configurations.gateway,  # Gateway domain
-            apim.hostname_configurations.management,  # Management portal domain
-            apim.hostname_configurations.developer_portal,  # Developer portal domain
-            apim.hostname_configurations.portal  # SCM domain
-        ]
+        # Check custom domains in APIM (hostname configurations)
+        for hostname_config in apim.hostname_configurations:
+            # Get the custom domain
+            custom_domain = hostname_config.host_name
 
-        for domain in custom_domains:
-            # Check if the domain is in the provided list
-            if domain and domain.host_name in domain_list:
+            # Check if the custom domain is in the provided domain list
+            if custom_domain in domain_list:
                 apim_results.append({
-                    "Domain": domain.host_name,
+                    "Domain": custom_domain,
                     "APIM Service Name": apim.name,
-                    "Subscription ID": subscription_id
+                    "Subscription ID": subscription_id,
+                    "Hostname Type": hostname_config.type
                 })
 
     return apim_results
@@ -52,7 +49,7 @@ def main():
     # Create or clear the output file and add headers
     with open(OUTPUT_FILE, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Domain", "APIM Service Name", "Subscription ID"])
+        writer.writerow(["Domain", "APIM Service Name", "Subscription ID", "Hostname Type"])
 
         # Iterate through all subscriptions
         for subscription in subscription_client.subscriptions.list():
@@ -62,12 +59,12 @@ def main():
             # Create an ApiManagementClient for each subscription
             apim_client = ApiManagementClient(credential, subscription_id)
 
-            # Check domains in this subscription's APIM services
-            results = check_domains_in_apim(subscription_id, apim_client, domain_list)
+            # Check custom domains in this subscription's APIM services
+            results = check_custom_domains_in_apim(subscription_id, apim_client, domain_list)
 
             # Write results to the CSV file
             for result in results:
-                writer.writerow([result["Domain"], result["APIM Service Name"], result["Subscription ID"]])
+                writer.writerow([result["Domain"], result["APIM Service Name"], result["Subscription ID"], result["Hostname Type"]])
 
     print(f"Domain check completed. Results saved to {OUTPUT_FILE}")
 
