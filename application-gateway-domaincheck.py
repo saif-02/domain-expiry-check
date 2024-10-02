@@ -6,6 +6,9 @@ from azure.mgmt.resource import SubscriptionClient, ResourceManagementClient
 # CSV file containing the list of domains to check
 CSV_FILE = "domains.csv"
 
+# Output file for the results
+OUTPUT_FILE = "domain_app_gateway_check.csv"
+
 # Azure credentials
 credential = DefaultAzureCredential()
 
@@ -68,16 +71,24 @@ def main():
         # Append results to the all_results list
         all_results.extend(results)
 
-    # Write results to the same CSV file
-    with open(CSV_FILE, mode='a', newline='') as file:
+    # Write results to a single CSV file
+    with open(OUTPUT_FILE, mode='w', newline='') as file:
         writer = csv.writer(file)
-        # Write a header for results if there are any
-        if all_results:
-            writer.writerow(["Domain", "Application Gateway Name", "Resource Group", "Subscription ID"])
-            for result in all_results:
-                writer.writerow([result["Domain"], result["App Gateway Name"], result["Resource Group"], result["Subscription ID"]])
+        # Write a header for results
+        writer.writerow(["Domain", "Application Gateway Name", "Resource Group", "Subscription ID"])
+        
+        # Write the domain checks into the CSV
+        for domain in domain_list:
+            # Check if the domain has any associated Application Gateways
+            associated_gateways = [result for result in all_results if result["Domain"] == domain]
+            if associated_gateways:
+                for result in associated_gateways:
+                    writer.writerow([result["Domain"], result["App Gateway Name"], result["Resource Group"], result["Subscription ID"]])
+            else:
+                # Write the domain with no results if not found
+                writer.writerow([domain, "Not Found", "N/A", "N/A"])
 
-    print(f"Domain check completed. Results appended to {CSV_FILE}")
+    print(f"Domain check completed. Results saved to {OUTPUT_FILE}")
 
 
 if __name__ == "__main__":
