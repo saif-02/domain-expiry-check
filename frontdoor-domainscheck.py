@@ -22,8 +22,15 @@ def extract_resource_group(resource_id):
 with open(csv_file_path, mode='w', newline='') as file:
     writer = csv.writer(file)
 
-    # Write CSV headers
-    writer.writerow(["Subscription ID", "Subscription Name", "Front Door Name", "Resource Group", "Location", "Associated Domain"])
+    # Write the initial CSV headers (we'll update this later if needed)
+    base_headers = ["Subscription ID", "Subscription Name", "Front Door Name", "Resource Group", "Location"]
+    writer.writerow(base_headers)
+
+    # Variable to track maximum number of domains across all Front Doors
+    max_domains = 0
+
+    # Store rows temporarily so that we can expand the headers later
+    rows = []
 
     # Iterate over all subscriptions
     try:
@@ -52,17 +59,39 @@ with open(csv_file_path, mode='w', newline='') as file:
 
                     # List the associated domains for the Front Door
                     if fd.frontend_endpoints:
-                        for endpoint in fd.frontend_endpoints:
-                            # Write the row to the CSV file for each associated domain
-                            writer.writerow([subscription_id, subscription_name, front_door_name, resource_group, location, endpoint.host_name])
+                        # Get domain names into a list
+                        domains = [endpoint.host_name for endpoint in fd.frontend_endpoints]
                     else:
-                        # If no associated domain, write a row indicating that
-                        writer.writerow([subscription_id, subscription_name, front_door_name, resource_group, location, "No associated domains found"])
+                        domains = ["No associated domains found"]
+
+                    # Track the maximum number of domains
+                    max_domains = max(max_domains, len(domains))
+
+                    # Add the base data for the current Front Door resource
+                    row = [subscription_id, subscription_name, front_door_name, resource_group, location]
+                    row.extend(domains)  # Add the domains as separate columns
+
+                    rows.append(row)
 
             except HttpResponseError as e:
                 print(f"Error fetching Front Door data for subscription {subscription_name}: {e}")
 
     except HttpResponseError as e:
         print(f"Error fetching subscriptions: {e}")
+
+    # Update the CSV headers to include domain columns based on max_domains
+    domain_headers = [f"Domain {i + 1}" for i in range(max_domains)]
+    full_headers = base_headers + domain_headers
+    print(f"Writing headers: {full_headers}")
+
+    # Rewrite the headers with domain columns
+    file.seek(0)
+    writer.writerow(full_headers)
+
+    # Write the actual rows
+    for row in rows:
+        # Ensure each row has enough columns to match the headers (fill with empty strings if needed)
+        row.extend([""] * (len(full_headers) - len(row)))
+        writer.writerow(row)
 
 print(f"Front Door data exported successfully to {csv_file_path}")
