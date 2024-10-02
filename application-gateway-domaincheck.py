@@ -15,7 +15,6 @@ credential = DefaultAzureCredential()
 # Initialize subscription client to list all subscriptions
 subscription_client = SubscriptionClient(credential)
 
-
 def check_domains_in_application_gateway(subscription_id, network_client, domain_list):
     results = []
 
