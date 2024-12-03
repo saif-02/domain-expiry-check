@@ -3,16 +3,19 @@ from datetime import datetime, timedelta
 import csv
 
 # Replace with your Venafi instance details
-BASE_URL = "https://<venafi-instance-url>"
-API_KEY = "<your-api-key>"
+BASE_URL = "https://<venafi-instance-url>"  # e.g., https://your-venafi-instance.com
+SERVICE_ACCOUNT_USERNAME = "<your-service-account-username>"
+SERVICE_ACCOUNT_PASSWORD = "<your-service-account-password>"
 GROUP_FOLDERS = ["GroupFolder1", "GroupFolder2"]  # Replace with your group folder names
 
-# Initialize Venafi SDK Client
+# Function to get Venafi API token using service account credentials
 def get_venafi_client():
     """
-    Initializes and returns the Venafi SDK client.
+    Initializes and returns the Venafi SDK client using a service account for authentication.
     """
-    client = vcert.Client(api_url=BASE_URL, api_key=API_KEY)
+    # Authenticate using service account credentials
+    client = vcert.Client(api_url=BASE_URL)
+    client.authenticate(username=SERVICE_ACCOUNT_USERNAME, password=SERVICE_ACCOUNT_PASSWORD)
     return client
 
 # Function to fetch certificates from a specific folder within a date range
@@ -73,7 +76,7 @@ def write_summary_to_csv(last_month_count, this_month_count, difference, output_
 
 # Main function
 def main():
-    print("Initializing Venafi SDK client...")
+    print("Initializing Venafi SDK client using service account...")
     client = get_venafi_client()
 
     print("Calculating certificate counts...")
