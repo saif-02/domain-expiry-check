@@ -1,0 +1,125 @@
+import requests
+from datetime import datetime, timedelta
+import csv
+
+# Replace with your Venafi instance details and service account credentials
+BASE_URL = "https://<venafi-instance-url>/vedsdk"
+SERVICE_ACCOUNT_USERNAME = "<service-account-username>"
+SERVICE_ACCOUNT_PASSWORD = "<service-account-password>"
+GROUP_FOLDERS = ["GroupFolder1", "GroupFolder2"]  # Replace with your group folder names
+
+
+def get_api_token():
+    """
+    Authenticate with Venafi using service account credentials and return an API token.
+    """
+    url = f"{BASE_URL}/Authorize/Token"
+    payload = {
+        "Username": SERVICE_ACCOUNT_USERNAME,
+        "Password": SERVICE_ACCOUNT_PASSWORD
+    }
+    response = requests.post(url, json=payload)
+    
+    if response.status_code == 200:
+        return response.json().get("Token")
+    else:
+        print(f"Error authenticating: {response.status_code}, {response.text}")
+        return None
+
+
+def fetch_certificates(folder, token, start_date=None, end_date=None):
+    """
+    Fetch certificates from a specific folder within a date range.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    query = {
+        "Expression": {
+            "Operator": "AND",
+            "Operands": [
+                {"Field": "ParentFolder", "Operator": "EQUALS", "Value": folder}
+            ]
+        }
+    }
+
+    # Add date filters to the query if provided
+    if start_date and end_date:
+        date_filter = {
+            "Field": "ValidationDate",
+            "Operator": "BETWEEN",
+            "Value": [start_date, end_date]
+        }
+        query["Expression"]["Operands"].append(date_filter)
+
+    response = requests.post(f"{BASE_URL}/Certificates/Search", json=query, headers=headers)
+
+    if response.status_code == 200:
+        return response.json().get("Certificates", [])
+    else:
+        print(f"Error fetching certificates for {folder}: {response.status_code}, {response.text}")
+        return []
+
+
+def calculate_cert_counts(token):
+    """
+    Calculate total certificate counts for last month and the current month.
+    """
+    now = datetime.utcnow()
+    first_day_this_month = now.replace(day=1)
+    first_day_last_month = (first_day_this_month - timedelta(days=1)).replace(day=1)
+    last_day_last_month = first_day_this_month - timedelta(days=1)
+
+    start_last_month = first_day_last_month.strftime("%Y-%m-%dT00:00:00Z")
+    end_last_month = last_day_last_month.strftime("%Y-%m-%dT23:59:59Z")
+    start_this_month = first_day_this_month.strftime("%Y-%m-%dT00:00:00Z")
+    end_this_month = now.strftime("%Y-%m-%dT23:59:59Z")
+
+    last_month_total = 0
+    this_month_total = 0
+
+    for folder in GROUP_FOLDERS:
+        # Fetch counts for last month
+        last_month_certs = fetch_certificates(folder, token, start_date=start_last_month, end_date=end_last_month)
+        last_month_total += len(last_month_certs)
+
+        # Fetch counts for this month
+        this_month_certs = fetch_certificates(folder, token, start_date=start_this_month, end_date=end_this_month)
+        this_month_total += len(this_month_certs)
+
+    return last_month_total, this_month_total
+
+
+def write_summary_to_csv(last_month_count, this_month_count, difference, output_file="venafi_cert_summary.csv"):
+    """
+    Write the summary data to a CSV file.
+    """
+    with open(output_file, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Month", "Total Certificates"])
+        writer.writerow(["Last Month", last_month_count])
+        writer.writerow(["Current Month", this_month_count])
+        writer.writerow(["Difference", difference])
+    print(f"Summary exported to {output_file}")
+
+
+def main():
+    # Authenticate and get the API token
+    print("Authenticating with Venafi...")
+    token = get_api_token()
+    if not token:
+        print("Failed to authenticate. Exiting...")
+        return
+
+    print("Calculating certificate counts...")
+    last_month_count, this_month_count = calculate_cert_counts(token)
+    difference = this_month_count - last_month_count
+
+    print(f"Last Month Total: {last_month_count}")
+    print(f"Current Month Total: {this_month_count}")
+    print(f"Difference: {difference}")
+
+    # Export the summary report to CSV
+    write_summary_to_csv(last_month_count, this_month_count, difference)
+
+
+if __name__ == "__main__":
+    main()
