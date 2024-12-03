@@ -1,65 +1,36 @@
-import requests
+import vcert
 from datetime import datetime, timedelta
 import csv
 
-# Replace with your Venafi instance details and service account credentials
-BASE_URL = "https://<venafi-instance-url>/vedsdk"
-SERVICE_ACCOUNT_USERNAME = "<service-account-username>"
-SERVICE_ACCOUNT_PASSWORD = "<service-account-password>"
+# Replace with your Venafi instance details
+BASE_URL = "https://<venafi-instance-url>"
+API_KEY = "<your-api-key>"
 GROUP_FOLDERS = ["GroupFolder1", "GroupFolder2"]  # Replace with your group folder names
 
-
-def get_api_token():
+# Initialize Venafi SDK Client
+def get_venafi_client():
     """
-    Authenticate with Venafi using service account credentials and return an API token.
+    Initializes and returns the Venafi SDK client.
     """
-    url = f"{BASE_URL}/Authorize/Token"
-    payload = {
-        "Username": SERVICE_ACCOUNT_USERNAME,
-        "Password": SERVICE_ACCOUNT_PASSWORD
-    }
-    response = requests.post(url, json=payload)
-    
-    if response.status_code == 200:
-        return response.json().get("Token")
-    else:
-        print(f"Error authenticating: {response.status_code}, {response.text}")
-        return None
+    client = vcert.Client(api_url=BASE_URL, api_key=API_KEY)
+    return client
 
-
-def fetch_certificates(folder, token, start_date=None, end_date=None):
+# Function to fetch certificates from a specific folder within a date range
+def fetch_certificates(client, folder, start_date=None, end_date=None):
     """
-    Fetch certificates from a specific folder within a date range.
+    Fetch certificates from a specific folder within a date range using Venafi SDK.
     """
-    headers = {"Authorization": f"Bearer {token}"}
-    query = {
-        "Expression": {
-            "Operator": "AND",
-            "Operands": [
-                {"Field": "ParentFolder", "Operator": "EQUALS", "Value": folder}
-            ]
-        }
-    }
+    query = vcert.query.CertificatesQuery(
+        parent_folder=folder,
+        start_time=start_date,
+        end_time=end_date
+    )
 
-    # Add date filters to the query if provided
-    if start_date and end_date:
-        date_filter = {
-            "Field": "ValidationDate",
-            "Operator": "BETWEEN",
-            "Value": [start_date, end_date]
-        }
-        query["Expression"]["Operands"].append(date_filter)
+    certificates = client.get_certificates(query)
+    return certificates
 
-    response = requests.post(f"{BASE_URL}/Certificates/Search", json=query, headers=headers)
-
-    if response.status_code == 200:
-        return response.json().get("Certificates", [])
-    else:
-        print(f"Error fetching certificates for {folder}: {response.status_code}, {response.text}")
-        return []
-
-
-def calculate_cert_counts(token):
+# Function to calculate certificate counts for a specific time range
+def calculate_cert_counts(client):
     """
     Calculate total certificate counts for last month and the current month.
     """
@@ -78,19 +49,19 @@ def calculate_cert_counts(token):
 
     for folder in GROUP_FOLDERS:
         # Fetch counts for last month
-        last_month_certs = fetch_certificates(folder, token, start_date=start_last_month, end_date=end_last_month)
+        last_month_certs = fetch_certificates(client, folder, start_date=start_last_month, end_date=end_last_month)
         last_month_total += len(last_month_certs)
 
         # Fetch counts for this month
-        this_month_certs = fetch_certificates(folder, token, start_date=start_this_month, end_date=end_this_month)
+        this_month_certs = fetch_certificates(client, folder, start_date=start_this_month, end_date=end_this_month)
         this_month_total += len(this_month_certs)
 
     return last_month_total, this_month_total
 
-
+# Function to write summary data to a CSV
 def write_summary_to_csv(last_month_count, this_month_count, difference, output_file="venafi_cert_summary.csv"):
     """
-    Write the summary data to a CSV file.
+    Write the summary data (counts) to a CSV file.
     """
     with open(output_file, mode="w", newline="") as file:
         writer = csv.writer(file)
@@ -100,17 +71,13 @@ def write_summary_to_csv(last_month_count, this_month_count, difference, output_
         writer.writerow(["Difference", difference])
     print(f"Summary exported to {output_file}")
 
-
+# Main function
 def main():
-    # Authenticate and get the API token
-    print("Authenticating with Venafi...")
-    token = get_api_token()
-    if not token:
-        print("Failed to authenticate. Exiting...")
-        return
+    print("Initializing Venafi SDK client...")
+    client = get_venafi_client()
 
     print("Calculating certificate counts...")
-    last_month_count, this_month_count = calculate_cert_counts(token)
+    last_month_count, this_month_count = calculate_cert_counts(client)
     difference = this_month_count - last_month_count
 
     print(f"Last Month Total: {last_month_count}")
@@ -120,6 +87,12 @@ def main():
     # Export the summary report to CSV
     write_summary_to_csv(last_month_count, this_month_count, difference)
 
+    # Optionally, export all certificates to a CSV (uncomment if needed)
+    # all_certificates = []
+    # for folder in GROUP_FOLDERS:
+    #     certificates = fetch_certificates(client, folder)
+    #     all_certificates.extend(certificates)
+    # write_to_csv(all_certificates, "venafi_certificates.csv")
 
 if __name__ == "__main__":
     main()
