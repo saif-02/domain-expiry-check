@@ -1,4 +1,4 @@
-from vcert import Connection, Authentication, CertificateSearchRequest
+from vcert import Connection, Authentication
 from datetime import datetime, timedelta
 import csv
 
@@ -22,20 +22,22 @@ def get_venafi_client():
     connection.get_access_token()  # Authenticate and get the access token
     return connection
 
-# Function to fetch certificates from a specific folder within a date range
+# Function to fetch certificates from a specific folder and date range
 def fetch_certificates(connection, folder, start_date=None, end_date=None):
     """
     Fetch certificates from a specific folder within a date range using Venafi SDK.
     """
-    search_request = CertificateSearchRequest(
-        parent_folder=folder,
-        valid_from=start_date,
-        valid_to=end_date
-    )
-    certificates = connection.search_certificates(search_request)
-    return certificates.certificates  # Return the list of certificates
+    search_params = {
+        "parent_folder": folder,
+        "valid_from": start_date,
+        "valid_to": end_date,
+    }
 
-# Function to calculate certificate counts for a specific time range
+    # Call the search API with search parameters
+    result = connection.search_certificates(search_params)
+    return result.get("certificates", [])
+
+# Function to calculate certificate counts for specific time ranges
 def calculate_cert_counts(connection):
     """
     Calculate total certificate counts for last month and the current month.
