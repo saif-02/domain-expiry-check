@@ -1,4 +1,4 @@
-import vcert
+from vcert import Connection, Authentication, CertificateRequest, CertSearchRequest
 from datetime import datetime, timedelta
 import csv
 
@@ -8,33 +8,35 @@ SERVICE_ACCOUNT_USERNAME = "<your-service-account-username>"
 SERVICE_ACCOUNT_PASSWORD = "<your-service-account-password>"
 GROUP_FOLDERS = ["GroupFolder1", "GroupFolder2"]  # Replace with your group folder names
 
-# Function to get Venafi API token using service account credentials and disable SSL validation
+# Function to get Venafi API connection
 def get_venafi_client():
     """
-    Initializes and returns the Venafi SDK client using a service account for authentication
-    with SSL validation disabled.
+    Initializes and returns the Venafi SDK connection using a service account.
     """
-    # Initialize the Venafi client with SSL validation disabled
-    client = vcert.Client(api_url=BASE_URL, verify=False)  # Disable SSL validation
-    client.authenticate(username=SERVICE_ACCOUNT_USERNAME, password=SERVICE_ACCOUNT_PASSWORD)
-    return client
+    auth = Authentication(
+        username=SERVICE_ACCOUNT_USERNAME,
+        password=SERVICE_ACCOUNT_PASSWORD
+    )
+    # Initialize the connection with TLS/SSL verification disabled
+    connection = Connection(url=BASE_URL, auth=auth, verify_ssl=False)
+    connection.get_access_token()  # Authenticate and get the access token
+    return connection
 
 # Function to fetch certificates from a specific folder within a date range
-def fetch_certificates(client, folder, start_date=None, end_date=None):
+def fetch_certificates(connection, folder, start_date=None, end_date=None):
     """
     Fetch certificates from a specific folder within a date range using Venafi SDK.
     """
-    query = vcert.query.CertificatesQuery(
+    search_request = CertSearchRequest(
         parent_folder=folder,
-        start_time=start_date,
-        end_time=end_date
+        created_on_from=start_date,
+        created_on_to=end_date
     )
-
-    certificates = client.get_certificates(query)
+    certificates = connection.search_certificates(search_request)
     return certificates
 
 # Function to calculate certificate counts for a specific time range
-def calculate_cert_counts(client):
+def calculate_cert_counts(connection):
     """
     Calculate total certificate counts for last month and the current month.
     """
@@ -43,21 +45,21 @@ def calculate_cert_counts(client):
     first_day_last_month = (first_day_this_month - timedelta(days=1)).replace(day=1)
     last_day_last_month = first_day_this_month - timedelta(days=1)
 
-    start_last_month = first_day_last_month.strftime("%Y-%m-%dT00:00:00Z")
-    end_last_month = last_day_last_month.strftime("%Y-%m-%dT23:59:59Z")
-    start_this_month = first_day_this_month.strftime("%Y-%m-%dT00:00:00Z")
-    end_this_month = now.strftime("%Y-%m-%dT23:59:59Z")
+    start_last_month = first_day_last_month.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    end_last_month = last_day_last_month.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    start_this_month = first_day_this_month.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    end_this_month = now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
     last_month_total = 0
     this_month_total = 0
 
     for folder in GROUP_FOLDERS:
         # Fetch counts for last month
-        last_month_certs = fetch_certificates(client, folder, start_date=start_last_month, end_date=end_last_month)
+        last_month_certs = fetch_certificates(connection, folder, start_date=start_last_month, end_date=end_last_month)
         last_month_total += len(last_month_certs)
 
         # Fetch counts for this month
-        this_month_certs = fetch_certificates(client, folder, start_date=start_this_month, end_date=end_this_month)
+        this_month_certs = fetch_certificates(connection, folder, start_date=start_this_month, end_date=end_this_month)
         this_month_total += len(this_month_certs)
 
     return last_month_total, this_month_total
@@ -77,7 +79,7 @@ def write_summary_to_csv(last_month_count, this_month_count, difference, output_
 
 # Main function
 def main():
-    print("Initializing Venafi SDK client using service account with SSL validation disabled...")
+    print("Initializing Venafi SDK client...")
     client = get_venafi_client()
 
     print("Calculating certificate counts...")
@@ -90,13 +92,6 @@ def main():
 
     # Export the summary report to CSV
     write_summary_to_csv(last_month_count, this_month_count, difference)
-
-    # Optionally, export all certificates to a CSV (uncomment if needed)
-    # all_certificates = []
-    # for folder in GROUP_FOLDERS:
-    #     certificates = fetch_certificates(client, folder)
-    #     all_certificates.extend(certificates)
-    # write_to_csv(all_certificates, "venafi_certificates.csv")
 
 if __name__ == "__main__":
     main()
