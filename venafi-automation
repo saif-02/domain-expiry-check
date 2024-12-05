@@ -1,25 +1,19 @@
-from vcert import Connection, Authentication
+from vcert import Connection
 from datetime import datetime, timedelta
 import csv
 
 # Replace with your Venafi instance details
 BASE_URL = "https://<venafi-instance-url>"  # e.g., https://your-venafi-instance.com
-SERVICE_ACCOUNT_USERNAME = "<your-service-account-username>"
-SERVICE_ACCOUNT_PASSWORD = "<your-service-account-password>"
+API_KEY = "<your-api-key>"  # Replace with your Venafi API key
 GROUP_FOLDERS = ["GroupFolder1", "GroupFolder2"]  # Replace with your group folder names
 
 # Function to initialize a Venafi connection
 def get_venafi_client():
     """
-    Initializes and returns the Venafi SDK connection using a service account.
+    Initializes and returns the Venafi SDK connection using an API key.
     """
-    auth = Authentication(
-        username=SERVICE_ACCOUNT_USERNAME,
-        password=SERVICE_ACCOUNT_PASSWORD
-    )
-    # Initialize the connection with TLS/SSL verification disabled
-    connection = Connection(url=BASE_URL, auth=auth, verify_ssl=False)
-    connection.get_access_token()  # Authenticate and get the access token
+    # Initialize the connection
+    connection = Connection(url=BASE_URL, api_key=API_KEY, verify_ssl=False)  # Disable SSL validation if necessary
     return connection
 
 # Function to fetch certificates from a specific folder and date range
