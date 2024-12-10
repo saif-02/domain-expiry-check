@@ -1,93 +1,76 @@
-from vcert import Connection
-from datetime import datetime, timedelta
+import requests
 import csv
+from datetime import datetime, timedelta
+import pytz
 
-# Replace with your Venafi instance details
-BASE_URL = "https://<venafi-instance-url>"  # e.g., https://your-venafi-instance.com
-API_KEY = "<your-api-key>"  # Replace with your Venafi API key
-GROUP_FOLDERS = ["GroupFolder1", "GroupFolder2"]  # Replace with your group folder names
+# Configuration
+BASE_URL = "https://venafi.cloud.com/vedsdk/certificates"
+BEARER_TOKEN = "your_bearer_token_here"
 
-# Function to initialize a Venafi connection
-def get_venafi_client():
-    """
-    Initializes and returns the Venafi SDK connection using an API key.
-    """
-    # Initialize the connection
-    connection = Connection(url=BASE_URL, api_key=API_KEY, verify_ssl=False)  # Disable SSL validation if necessary
-    return connection
+# Set up headers for authentication
+HEADERS = {
+    "Authorization": f"Bearer {BEARER_TOKEN}",
+    "Content-Type": "application/json",
+}
 
-# Function to fetch certificates from a specific folder and date range
-def fetch_certificates(connection, folder, start_date=None, end_date=None):
-    """
-    Fetch certificates from a specific folder within a date range using Venafi SDK.
-    """
-    search_params = {
-        "parent_folder": folder,
-        "valid_from": start_date,
-        "valid_to": end_date,
-    }
+def fetch_certificates():
+    """Fetch certificate data from the Venafi API."""
+    response = requests.get(BASE_URL, headers=HEADERS)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+        return None
 
-    # Call the search API with search parameters
-    result = connection.search_certificates(search_params)
-    return result.get("certificates", [])
+def write_json_to_csv(certificates, filename="certificates.csv"):
+    """Write JSON data to a CSV file."""
+    if not certificates:
+        print("No data to write to CSV.")
+        return
+    
+    # Extract keys for CSV header from the first certificate
+    keys = certificates[0].keys()
+    
+    with open(filename, mode='w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(certificates)
+    
+    print(f"Certificates data written to {filename}")
 
-# Function to calculate certificate counts for specific time ranges
-def calculate_cert_counts(connection):
-    """
-    Calculate total certificate counts for last month and the current month.
-    """
-    now = datetime.utcnow()
-    first_day_this_month = now.replace(day=1)
-    first_day_last_month = (first_day_this_month - timedelta(days=1)).replace(day=1)
-    last_day_last_month = first_day_this_month - timedelta(days=1)
+def analyze_certificates(certificates):
+    """Analyze certificates to find those created in the last and current month."""
+    now = datetime.now(pytz.UTC)
+    start_of_current_month = datetime(now.year, now.month, 1, tzinfo=pytz.UTC)
+    start_of_last_month = start_of_current_month - timedelta(days=1)
+    start_of_last_month = datetime(start_of_last_month.year, start_of_last_month.month, 1, tzinfo=pytz.UTC)
 
-    start_last_month = first_day_last_month.strftime("%Y-%m-%dT%H:%M:%SZ")
-    end_last_month = last_day_last_month.strftime("%Y-%m-%dT%H:%M:%SZ")
-    start_this_month = first_day_this_month.strftime("%Y-%m-%dT%H:%M:%SZ")
-    end_this_month = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+    last_month_count = 0
+    current_month_count = 0
 
-    last_month_total = 0
-    this_month_total = 0
+    for cert in certificates:
+        created_on = cert.get("CreatedOn")
+        if created_on:
+            created_date = datetime.fromisoformat(created_on.rstrip("Z")).replace(tzinfo=pytz.UTC)
+            if start_of_last_month <= created_date < start_of_current_month:
+                last_month_count += 1
+            elif created_date >= start_of_current_month:
+                current_month_count += 1
 
-    for folder in GROUP_FOLDERS:
-        # Fetch counts for last month
-        last_month_certs = fetch_certificates(connection, folder, start_date=start_last_month, end_date=end_last_month)
-        last_month_total += len(last_month_certs)
+    return last_month_count, current_month_count
 
-        # Fetch counts for this month
-        this_month_certs = fetch_certificates(connection, folder, start_date=start_this_month, end_date=end_this_month)
-        this_month_total += len(this_month_certs)
-
-    return last_month_total, this_month_total
-
-# Function to write summary data to a CSV
-def write_summary_to_csv(last_month_count, this_month_count, difference, output_file="venafi_cert_summary.csv"):
-    """
-    Write the summary data (counts) to a CSV file.
-    """
-    with open(output_file, mode="w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["Month", "Total Certificates"])
-        writer.writerow(["Last Month", last_month_count])
-        writer.writerow(["Current Month", this_month_count])
-        writer.writerow(["Difference", difference])
-    print(f"Summary exported to {output_file}")
-
-# Main function
 def main():
-    print("Initializing Venafi SDK client...")
-    client = get_venafi_client()
-
-    print("Calculating certificate counts...")
-    last_month_count, this_month_count = calculate_cert_counts(client)
-    difference = this_month_count - last_month_count
-
-    print(f"Last Month Total: {last_month_count}")
-    print(f"Current Month Total: {this_month_count}")
-    print(f"Difference: {difference}")
-
-    # Export the summary report to CSV
-    write_summary_to_csv(last_month_count, this_month_count, difference)
+    certificates_data = fetch_certificates()
+    if certificates_data and "Certificates" in certificates_data:
+        certificates = certificates_data["Certificates"]
+        # Write the JSON data to CSV
+        write_json_to_csv(certificates)
+        # Analyze the certificates
+        last_month_count, current_month_count = analyze_certificates(certificates)
+        print(f"Certificates created last month: {last_month_count}")
+        print(f"Certificates created this month: {current_month_count}")
+    else:
+        print("No certificate data found.")
 
 if __name__ == "__main__":
     main()
