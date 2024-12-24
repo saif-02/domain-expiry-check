@@ -2,32 +2,35 @@ pipeline {
     agent any
     
     stages {
-        stage('Setup Environment') {
+        stage('Setup GLIBC') {
             steps {
-                echo 'Setting up environment...'
-
-                // Check GLIBC version and update if necessary
+                echo 'Setting up GLIBC...'
                 sh '''
-                echo "Checking GLIBC version..."
-                GLIBC_VERSION=$(ldd --version | head -n 1 | awk '{print $NF}')
+                # Define GLIBC version and paths
                 REQUIRED_VERSION="2.28"
+                INSTALL_DIR="/opt/glibc-${REQUIRED_VERSION}"
 
-                if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$GLIBC_VERSION" | sort -V | head -n 1)" != "$REQUIRED_VERSION" ]; then
+                # Check current GLIBC version
+                CURRENT_VERSION=$(ldd --version | head -n 1 | awk '{print $NF}')
+                echo "Current GLIBC version: $CURRENT_VERSION"
+
+                if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$CURRENT_VERSION" | sort -V | head -n 1)" != "$REQUIRED_VERSION" ]; then
                     echo "Updating GLIBC to version $REQUIRED_VERSION..."
-                    wget http://ftp.gnu.org/gnu/libc/glibc-2.28.tar.gz
-                    tar -xvzf glibc-2.28.tar.gz
-                    cd glibc-2.28
-                    mkdir build
-                    cd build
-                    ../configure --prefix=/opt/glibc-2.28
+                    wget http://ftp.gnu.org/gnu/libc/glibc-${REQUIRED_VERSION}.tar.gz
+                    tar -xvzf glibc-${REQUIRED_VERSION}.tar.gz
+                    cd glibc-${REQUIRED_VERSION}
+                    mkdir build && cd build
+                    ../configure --prefix=${INSTALL_DIR}
                     make -j$(nproc)
-                    sudo make install
-                    export LD_LIBRARY_PATH=/opt/glibc-2.28/lib:$LD_LIBRARY_PATH
+                    make install
+                    export LD_LIBRARY_PATH=${INSTALL_DIR}/lib:$LD_LIBRARY_PATH
+                    echo "GLIBC updated successfully."
                 else
-                    echo "GLIBC version is sufficient: $GLIBC_VERSION"
+                    echo "GLIBC is already up-to-date."
                 fi
                 '''
             }
+        }
         stage('Run Python Script') {
             steps {
                 script {
