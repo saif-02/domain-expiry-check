@@ -2,6 +2,32 @@ pipeline {
     agent any
     
     stages {
+        stage('Setup Environment') {
+            steps {
+                echo 'Setting up environment...'
+
+                // Check GLIBC version and update if necessary
+                sh '''
+                echo "Checking GLIBC version..."
+                GLIBC_VERSION=$(ldd --version | head -n 1 | awk '{print $NF}')
+                REQUIRED_VERSION="2.28"
+
+                if [ "$(printf '%s\n' "$REQUIRED_VERSION" "$GLIBC_VERSION" | sort -V | head -n 1)" != "$REQUIRED_VERSION" ]; then
+                    echo "Updating GLIBC to version $REQUIRED_VERSION..."
+                    wget http://ftp.gnu.org/gnu/libc/glibc-2.28.tar.gz
+                    tar -xvzf glibc-2.28.tar.gz
+                    cd glibc-2.28
+                    mkdir build
+                    cd build
+                    ../configure --prefix=/opt/glibc-2.28
+                    make -j$(nproc)
+                    sudo make install
+                    export LD_LIBRARY_PATH=/opt/glibc-2.28/lib:$LD_LIBRARY_PATH
+                else
+                    echo "GLIBC version is sufficient: $GLIBC_VERSION"
+                fi
+                '''
+            }
         stage('Run Python Script') {
             steps {
                 script {
